@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mythic Survivor</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" href="creatures/bakunawa.svg" />
+</head>
+<body>
+  <main id="app">
+
+    <!-- Home -->
+    <section id="screen-home" class="screen">
+      <h1 class="title">Mythic <span>Survivor</span></h1>
+      <p class="tagline">Charge your power. Shield the blow. Strike last.</p>
+      <div class="panel">
+        <label for="name-input">Your name</label>
+        <input id="name-input" maxlength="20" placeholder="e.g. roomba" autocomplete="off" />
+        <label>Your beast <span class="optional">(optional — first free one if taken)</span></label>
+        <div id="home-creature-picker" class="creature-picker"></div>
+        <button id="create-btn" class="btn btn-gold">Create a room</button>
+        <div class="divider"><span>or join one</span></div>
+        <div class="join-row">
+          <input id="code-input" maxlength="4" placeholder="CODE" autocomplete="off" />
+          <button id="join-btn" class="btn">Join</button>
+        </div>
+      </div>
+      <details class="rules">
+        <summary>How to play</summary>
+        <ul>
+          <li>Everyone starts with <strong>1 charge</strong> and picks a move each round, in secret.</li>
+          <li><strong>⚡ Charge</strong> — gain a charge (max 3).</li>
+          <li><strong>🛡️ Shield</strong> — free; blocks every attack aimed at you this round.</li>
+          <li><strong>⚔️ Attack</strong> — spend 1 charge, pick a target. If they didn't shield, they're out.</li>
+          <li>Moves resolve at the same time — attackers who fall still land their blow.</li>
+          <li>The fallen get one chance per death to face the spirits: answer a gauntlet of 3–10 trivia questions (all correct!) to rise as a <strong>Wraith</strong> — full powers, but a Wraith can never win.</li>
+          <li>Last mortal standing wins. If the last mortals fell together, no one does — not even a Wraith.</li>
+        </ul>
+      </details>
+    </section>
+
+    <!-- Lobby -->
+    <section id="screen-lobby" class="screen hidden">
+      <h2 class="subtitle">Gathering the beasts…</h2>
+      <div class="room-code-box">
+        <span>Room code</span>
+        <strong id="lobby-code">----</strong>
+        <span id="lobby-timer" class="lobby-timer"></span>
+        <button id="copy-link-btn" class="btn btn-small">Copy invite link</button>
+      </div>
+      <div id="lobby-players" class="lobby-players"></div>
+      <div class="customize">
+        <label for="rename-input">Your name</label>
+        <div class="join-row">
+          <input id="rename-input" maxlength="20" autocomplete="off" />
+          <button id="rename-btn" class="btn btn-small">Rename</button>
+        </div>
+        <label>Your beast</label>
+        <div id="creature-picker" class="creature-picker"></div>
+      </div>
+      <p id="lobby-hint" class="hint"></p>
+      <button id="start-btn" class="btn btn-gold hidden">Start the battle</button>
+    </section>
+
+    <!-- Game -->
+    <section id="screen-game" class="screen hidden">
+      <header class="game-header">
+        <span id="round-label">Round 1</span>
+        <span id="game-code" class="muted"></span>
+      </header>
+      <div id="banner" class="banner hidden"></div>
+      <div id="board" class="board"></div>
+      <div id="action-bar" class="action-bar">
+        <p id="action-hint" class="hint">Choose your move</p>
+        <div class="action-buttons">
+          <button id="act-charge" class="btn act" data-action="charge">⚡ Charge</button>
+          <button id="act-shield" class="btn act" data-action="shield">🛡️ Shield</button>
+          <button id="act-attack" class="btn act" data-action="attack">⚔️ Attack</button>
+        </div>
+        <button id="revive-btn" class="btn btn-gold hidden">👻 Face the spirits' trivia — rise as a Wraith</button>
+      </div>
+      <button id="again-btn" class="btn btn-gold hidden">Play again — same lobby</button>
+      <p id="over-hint" class="hint hidden"></p>
+      <div id="log" class="log"></div>
+    </section>
+
+  </main>
+  <div id="chat-box" class="chat-box hidden">
+    <div id="chat-messages" class="chat-messages"></div>
+    <div id="emote-row" class="emote-row">
+      <button class="emote-btn" data-emoji="👍">👍</button>
+      <button class="emote-btn" data-emoji="😂">😂</button>
+      <button class="emote-btn" data-emoji="😮">😮</button>
+      <button class="emote-btn" data-emoji="🔥">🔥</button>
+      <button class="emote-btn" data-emoji="💀">💀</button>
+      <button class="emote-btn" data-emoji="❤️">❤️</button>
+    </div>
+    <div class="join-row">
+      <input id="chat-input" maxlength="200" placeholder="Say something…" autocomplete="off" />
+      <button id="chat-send" class="btn btn-small">Send</button>
+    </div>
+  </div>
+  <div id="quiz-modal" class="quiz-overlay hidden">
+    <div class="quiz-box">
+      <div id="quiz-progress" class="quiz-progress"></div>
+      <div id="quiz-question" class="quiz-question"></div>
+      <div id="quiz-choices" class="quiz-choices"></div>
+      <p class="hint">One wrong answer and the spirits turn away.</p>
+    </div>
+  </div>
+  <div id="toast" class="toast hidden"></div>
+  <footer class="credits">
+    Creature icons by <a href="https://game-icons.net" target="_blank" rel="noopener">Lorc &amp; Delapouite (game-icons.net)</a>, CC BY 3.0
+  </footer>
+  <script src="vendor/peerjs.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
