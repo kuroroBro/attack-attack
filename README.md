@@ -12,12 +12,15 @@ ad-free, static site — no backend, no build step, peer-to-peer over WebRTC.
   - **⚡ Charge** — gain a charge (max 3)
   - **🛡 Shield** — free; blocks *every* attack aimed at you this round
   - **⚔ Attack** — spend 1 charge and pick a target; they're eliminated
-    unless they shielded. Round 1 is always charge/shield only, since no one
-    starts with a charge to spend.
+    unless they shielded. Round 1 is always charge/shield only in practice,
+    since no one starts with a charge to spend — though attacking with 0
+    charges is still a legal move, it's just a dud (see below).
 - Moves resolve simultaneously — an attacker who falls still lands their
   blow. If two players attack each other in the same round, the blows
   collide and cancel out — neither is eliminated (both still spend the
-  charge).
+  charge). A 0-charge attack is a dud: no charge to spend, no hit, and it
+  does **not** cancel an incoming attack — only a real (charged) attack can
+  cancel another real attack.
 - Charges are private — you can see your own, but not anyone else's. The
   game still tracks and enforces them (the cap, the cost to attack), it just
   doesn't show a public counter.

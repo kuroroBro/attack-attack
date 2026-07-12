@@ -89,6 +89,31 @@
       real tabs produces "blows collided" on both logs with neither player
       marked dead.
 
+## Phase 8 — Attacking with 0 charges is a dud, not blocked (post-launch addition)
+- [x] `js/game.js`: `submitAction` no longer errors on a 0-charge attack —
+      only target validity (alive, not self) is checked at declare time.
+- [x] `js/game.js`: `resolveRound` snapshots dud/real status per attacker
+      before spending any charges (`isDudAttack` map), then uses that
+      snapshot both for the attacker's own outcome (no charge spent, no
+      hit) and for `isMutualAttack` (a dud can neither cause nor be
+      canceled-into a mutual cancellation — a real attack lands on a dud
+      attacker exactly like any other unshielded target). Added a `dud`
+      flag per move in the round summary.
+- [x] `js/main.js`: removed the `act-attack` disabled-at-0-charges gate;
+      round log shows "no charge, the strike fizzles" for a dud move.
+- [x] `index.html` / `README.md`: rules copy updated.
+- [x] `tests/game.test.mjs`: replaced the old "attack requires a charge"
+      error-case test with one confirming a 0-charge attack is accepted;
+      added dedicated dud-resolution tests (a lone dud does nothing; a
+      dud does not cancel a real attack landing on it). Caught and fixed
+      a real bug during this (plan.md Decision #8) where dud status was
+      being read from already-mutated charges instead of a pre-round
+      snapshot. 28/28 passing.
+- [x] Playwright playtest against two live tabs: confirmed the Attack
+      button is enabled at round 1, a dud attack produces no elimination
+      and the "fizzles" log line, and — in a dud-vs-real exchange — the
+      real attacker's strike still eliminates the dud-throwing player.
+
 ## Open backlog (intentionally deferred)
 
 - Host migration on Host disconnect (plan.md Decision #2) — the room

@@ -197,7 +197,8 @@ export function submitAction(room, playerId, action) {
   } else if (type === "shield") {
     player.action = { type };
   } else if (type === "attack") {
-    if (player.charges < 1) return { error: "Attacking needs a charge" };
+    // No minimum charge to declare an attack — a 0-charge attack is legal,
+    // it just resolves as a dud (see resolveRound).
     const target = getPlayer(room, action.targetId);
     if (!target || !target.alive) return { error: "Pick a living target" };
     if (target.id === playerId) return { error: "You cannot attack yourself" };
@@ -221,29 +222,51 @@ export function allActionsIn(room) {
 // spend their charge; only the elimination is called off. This does not
 // extend to longer cycles (X→Y, Y→Z, Z→X all resolve normally) — only a
 // literal pair attacking each other cancels.
+//
+// An attack declared with 0 charges is legal but a dud: no charge to spend
+// (there's none), no hit, and — because nothing real was thrown — it can't
+// cancel an incoming attack either. An attack aimed at a dud attacker lands
+// exactly as if that dud attacker had shielded-or-not normally; it is only
+// the *dud's own* strike that fizzles.
 export function resolveRound(room) {
   const actors = alivePlayers(room);
   const shielded = new Set(
     actors.filter((p) => p.action.type === "shield").map((p) => p.id)
   );
 
+  // Snapshot dud/real status for every attack *before* any charges are
+  // spent — otherwise decrementing an attacker's own charge while resolving
+  // them would make them look like a dud by the time their opponent's
+  // mutual-attack check runs against them.
+  const isDudAttack = new Map();
+  for (const p of actors) {
+    if (p.action.type === "attack") isDudAttack.set(p.id, p.charges < 1);
+  }
+
   function isMutualAttack(p) {
+    if (isDudAttack.get(p.id)) return false;
     const target = getPlayer(room, p.action.targetId);
     return (
       !!target &&
       !!target.action &&
       target.action.type === "attack" &&
-      target.action.targetId === p.id
+      target.action.targetId === p.id &&
+      !isDudAttack.get(target.id)
     );
   }
 
   const hit = new Set();
   const canceled = new Set();
+  const dud = new Set();
   for (const p of actors) {
     const a = p.action;
     if (a.type === "charge") {
       p.charges = Math.min(MAX_CHARGES, p.charges + 1);
     } else if (a.type === "attack") {
+      if (isDudAttack.get(p.id)) {
+        dud.add(p.id); // no charge to spend, no hit, no cancel — a no-op
+        continue;
+      }
       p.charges -= 1;
       if (isMutualAttack(p)) {
         canceled.add(p.id);
@@ -265,6 +288,7 @@ export function resolveRound(room) {
       targetName: p.action.targetId ? getPlayer(room, p.action.targetId).name : null,
       eliminated: hit.has(p.id),
       canceled: canceled.has(p.id),
+      dud: dud.has(p.id),
     })),
   };
 

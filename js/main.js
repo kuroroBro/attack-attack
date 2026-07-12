@@ -238,7 +238,8 @@ function renderGame() {
   bar.classList.toggle("hidden", !inRound);
   if (inRound) {
     $("act-charge").disabled = my.charges >= state.maxCharges;
-    $("act-attack").disabled = my.charges < 1;
+    // Attack is always selectable — with 0 charges it's still a legal move,
+    // it just resolves as a dud (js/game.js resolveRound).
     $("act-shield").disabled = false;
     for (const btn of document.querySelectorAll(".act")) {
       btn.classList.toggle("selected", btn.dataset.action === pendingAction);
@@ -337,7 +338,8 @@ function appendRoundLog(summary) {
   for (const m of summary.moves) {
     let text = `${m.wraith ? "👻 " : ""}${m.name} ${ACTION_LABEL[m.action]}`;
     if (m.action === "attack") text += ` ${m.targetName}`;
-    if (m.canceled) text += " — blows collided, no one falls ⚔️";
+    if (m.dud) text += " — no charge, the strike fizzles";
+    else if (m.canceled) text += " — blows collided, no one falls ⚔️";
     else if (m.eliminated) text += " — eliminated ☠";
     lines.push({ text, kill: m.eliminated });
   }

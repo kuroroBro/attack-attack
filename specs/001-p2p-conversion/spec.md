@@ -54,15 +54,25 @@ As a player, I want to secretly choose Charge, Shield, or Attack each round
 and see all moves resolve at once, so no one can react to what I picked.
 
 **Acceptance criteria**
-- 0 starting charges, max 3 — round 1 is always charge/shield only, since no
-  one can afford to attack yet (see plan.md Changelog v2). Shield blocks
-  every attack aimed at that player this round; Attack costs 1 charge and is
-  chosen with a target; simultaneous resolution (a dying attacker's own
-  attack still lands).
-- A direct mutual attack — X attacks Y and Y attacks X in the same round —
-  cancels out: neither is eliminated, though both still spend the charge
-  (v2). This does not extend to longer cycles (X→Y, Y→Z, Z→X all resolve
-  normally); only a literal attacking pair cancels.
+- 0 starting charges, max 3 — round 1 is charge/shield only in practice,
+  since no one starts with a charge to spend (see plan.md Changelog v2).
+  Shield blocks every attack aimed at that player this round; simultaneous
+  resolution (a dying attacker's own attack still lands).
+- Attack is always a selectable move, even at 0 charges (v3) — there is no
+  minimum-charge gate on *declaring* an attack, only on what it does once
+  resolved:
+  - With ≥1 charge: costs 1 charge, and the target is eliminated unless
+    they shielded.
+  - With 0 charges: a **dud** — no charge to spend (stays at 0), no hit,
+    and it does not participate in mutual-attack cancellation at all (see
+    next bullet) in either direction.
+- A direct mutual attack — X attacks Y and Y attacks X in the same round,
+  **both with ≥1 charge** — cancels out: neither is eliminated, though both
+  still spend the charge (v2). This does not extend to longer cycles
+  (X→Y, Y→Z, Z→X all resolve normally); only a literal attacking pair
+  cancels. If one side of the pair is a dud (0 charges), there is no
+  cancellation: the real attacker's strike lands on the dud attacker
+  exactly as it would against any other unshielded target (v3).
 - Other players' pending action **type** and **target** must never appear on
   the wire before the round resolves — only a `submitted: true/false` flag
   is broadcast mid-round, exactly as today.

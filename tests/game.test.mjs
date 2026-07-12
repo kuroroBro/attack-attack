@@ -38,14 +38,46 @@ test("start requires host and 2+ players", () => {
   assert.strictEqual(room.phase, "playing");
 });
 
-test("charge caps at 3 and attack requires a charge", () => {
+test("charge caps at 3, but attacking with 0 charges is legal (a dud)", () => {
   const room = startedRoom(["Ana", "Ben"]);
   const ana = g.getPlayer(room, "p1");
   ana.charges = 3;
   assert.ok(g.submitAction(room, "p1", { type: "charge" }).error);
   const ben = g.getPlayer(room, "p2");
   ben.charges = 0;
-  assert.ok(g.submitAction(room, "p2", { type: "attack", targetId: "p1" }).error);
+  assert.deepStrictEqual(g.submitAction(room, "p2", { type: "attack", targetId: "p1" }), { done: false });
+});
+
+test("a 0-charge attack is a dud: no hit, no charge spent, no effect on the target", () => {
+  const room = startedRoom(["Ana", "Ben"]);
+  g.getPlayer(room, "p1").charges = 0;
+  g.submitAction(room, "p1", { type: "attack", targetId: "p2" });
+  g.submitAction(room, "p2", { type: "charge" });
+  const summary = g.resolveRound(room);
+  const move = summary.moves.find((m) => m.id === "p1");
+  assert.strictEqual(move.dud, true);
+  assert.strictEqual(move.eliminated, false);
+  assert.strictEqual(move.canceled, false);
+  assert.strictEqual(g.getPlayer(room, "p1").charges, 0); // stayed at 0, not -1
+  assert.strictEqual(g.getPlayer(room, "p2").alive, true);
+  assert.strictEqual(room.phase, "playing");
+});
+
+test("a dud attack does not cancel a real attack landing on the dud attacker", () => {
+  const room = startedRoom(["Ana", "Ben"]);
+  g.getPlayer(room, "p1").charges = 0; // Ana will throw a dud
+  g.getPlayer(room, "p2").charges = 1; // Ben has a real charge
+  g.submitAction(room, "p1", { type: "attack", targetId: "p2" }); // dud
+  g.submitAction(room, "p2", { type: "attack", targetId: "p1" }); // real, aimed right back
+  const summary = g.resolveRound(room);
+  const anaMove = summary.moves.find((m) => m.id === "p1");
+  const benMove = summary.moves.find((m) => m.id === "p2");
+  assert.strictEqual(anaMove.dud, true);
+  assert.strictEqual(benMove.canceled, false); // a dud can't trigger a cancel
+  assert.strictEqual(benMove.eliminated, false);
+  assert.strictEqual(anaMove.eliminated, true); // Ben's real attack lands normally
+  assert.strictEqual(g.getPlayer(room, "p1").alive, false);
+  assert.strictEqual(g.getPlayer(room, "p2").alive, true);
 });
 
 test("cannot attack yourself or a dead player", () => {

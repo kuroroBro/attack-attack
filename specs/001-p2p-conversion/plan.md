@@ -133,6 +133,19 @@ process; now the Host player's own browser tab. See Decisions #1.
    resolves as three separate ordinary hits; deliberately not treated as
    "everyone cancels," since that would take real cycle-detection for a
    mechanic nobody asked for.
+8. **Dud-attack status is snapshotted before any charge is spent, not
+   recomputed mid-resolution (v3).** The first implementation called the
+   same `isDud(player)` check both to decide an attacker's own outcome
+   *and*, inside `isMutualAttack`, to check the opponent — but by the time
+   an attacker's own branch ran `p.charges -= 1`, a second call to
+   `isDud(p)` for that same player (from the opponent's perspective) would
+   see the post-decrement charge and wrongly read as a dud. Fixed by
+   computing an `isDudAttack: Map<playerId, boolean>` for every attacker up
+   front, from charges as they stood when the round started, and reading
+   from that map everywhere instead of re-deriving it from live (mutating)
+   state. General lesson for this file: anything that reads "current
+   charges" during `resolveRound` must be careful about *when* during the
+   loop it reads them, since the loop itself mutates charges as it goes.
 
 ## Changelog
 
@@ -149,3 +162,10 @@ process; now the Host player's own browser tab. See Decisions #1.
   non-owning player's client never receives them (Decision #6), matching
   this project's existing "redact at the network level, not just the UI"
   convention for the trivia gauntlet.
+- **v3** (2026-07-12): Attack no longer requires a charge to declare —
+  attacking at 0 charges is legal but resolves as a dud (no charge spent,
+  no hit) and, critically, a dud does not trigger mutual-attack
+  cancellation in either direction: a real attack aimed at a dud attacker
+  lands normally, exactly as if the dud attacker had done nothing (Decision
+  #8 documents a real bug caught and fixed while implementing this). The
+  Attack button in the UI is no longer disabled at 0 charges.
