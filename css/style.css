@@ -25,6 +25,12 @@ body {
   align-items: center;
 }
 
+body:has(#screen-home:not(.hidden)) {
+  background:
+    linear-gradient(180deg, rgba(14, 11, 26, 0.55) 0%, rgba(14, 11, 26, 0.92) 85%),
+    url('../images/mythic-survivor-hero.jpg') center top / cover no-repeat;
+}
+
 #app { width: 100%; max-width: 760px; padding: 24px 16px 8px; }
 .screen { display: flex; flex-direction: column; align-items: center; gap: 18px; }
 .hidden { display: none !important; }
