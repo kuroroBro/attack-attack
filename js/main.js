@@ -69,18 +69,6 @@ function avatar(creature) {
   return span;
 }
 
-function pips(charges, max) {
-  const box = document.createElement("div");
-  box.className = "pips";
-  box.title = `${charges}/${max} charges`;
-  for (let i = 0; i < max; i++) {
-    const pip = document.createElement("span");
-    pip.className = "pip" + (i < charges ? " full" : "");
-    box.appendChild(pip);
-  }
-  return box;
-}
-
 // Countdown until the lobby stops accepting joins. Only the timer text is
 // updated each second — a full re-render would interrupt clicks and typing.
 function renderLobbyTimer() {
@@ -224,7 +212,7 @@ function renderGame() {
     cname.className = "cname";
     cname.textContent =
       (p.wraith ? "Wraith · " : "") + p.creatureName + (p.left ? " · left" : "");
-    card.append(name, cname, pips(p.charges, state.maxCharges));
+    card.append(name, cname);
 
     const ready = document.createElement("div");
     ready.className = "ready-dot";
@@ -260,7 +248,7 @@ function renderGame() {
       ? "Pick a creature to attack"
       : my.submitted
       ? "Move locked in — you can still change it until everyone is ready"
-      : `${wraithTag}You have ${my.charges} charge${my.charges === 1 ? "" : "s"} — choose your move`;
+      : `${wraithTag}Choose your move`;
   }
   if (state.phase === "playing" && my && !my.alive) {
     bar.classList.remove("hidden");
@@ -349,7 +337,8 @@ function appendRoundLog(summary) {
   for (const m of summary.moves) {
     let text = `${m.wraith ? "👻 " : ""}${m.name} ${ACTION_LABEL[m.action]}`;
     if (m.action === "attack") text += ` ${m.targetName}`;
-    if (m.eliminated) text += " — eliminated ☠";
+    if (m.canceled) text += " — blows collided, no one falls ⚔️";
+    else if (m.eliminated) text += " — eliminated ☠";
     lines.push({ text, kill: m.eliminated });
   }
   // show lines under the head, newest round on top
@@ -372,7 +361,7 @@ function handleEvent(playerId, event, payload) {
       const res = game.addPlayer(room, playerId, payload.name, payload.creatureId);
       if (res.error) return { error: res.error };
       broadcastState();
-      return { code: room.code, playerId, state: game.toPublicState(room) };
+      return { code: room.code, playerId, state: game.toPublicState(room, playerId) };
     }
     case "rename": {
       const res = game.renamePlayer(room, playerId, payload.name);
@@ -459,9 +448,14 @@ function push(event, payload) {
   handlePush(event, payload);
 }
 
+// Unlike push(), a state snapshot differs per recipient — each player's own
+// charges are included, everyone else's are withheld (js/game.js's
+// toPublicState). net.broadcastEach computes that per-connection; the
+// Host's own view (no network hop) is applied directly the same way.
 function broadcastState() {
   room.touchedAt = Date.now();
-  push("state", game.toPublicState(room));
+  net.broadcastEach("state", (playerId) => game.toPublicState(room, playerId));
+  handlePush("state", game.toPublicState(room, myId));
 }
 
 function maybeResolve() {
@@ -622,7 +616,7 @@ $("create-btn").addEventListener("click", async () => {
     isHost = true;
     net = hostNet;
     myId = HOST_ID;
-    enterRoom({ code: room.code, playerId: myId, state: game.toPublicState(room) });
+    enterRoom({ code: room.code, playerId: myId, state: game.toPublicState(room, myId) });
   } catch (err) {
     resetToHome();
     toast(err.message || "Could not create a room");

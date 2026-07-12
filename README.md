@@ -8,12 +8,19 @@ ad-free, static site — no backend, no build step, peer-to-peer over WebRTC.
 
 ## Rules
 
-- Everyone starts with **1 charge** and secretly picks a move each round:
+- Everyone starts with **no charges** and secretly picks a move each round:
   - **⚡ Charge** — gain a charge (max 3)
   - **🛡 Shield** — free; blocks *every* attack aimed at you this round
   - **⚔ Attack** — spend 1 charge and pick a target; they're eliminated
-    unless they shielded
-- Moves resolve simultaneously — an attacker who falls still lands their blow.
+    unless they shielded. Round 1 is always charge/shield only, since no one
+    starts with a charge to spend.
+- Moves resolve simultaneously — an attacker who falls still lands their
+  blow. If two players attack each other in the same round, the blows
+  collide and cancel out — neither is eliminated (both still spend the
+  charge).
+- Charges are private — you can see your own, but not anyone else's. The
+  game still tracks and enforces them (the cap, the cost to attack), it just
+  doesn't show a public counter.
 - The dead get one chance per death to rise as a **Wraith**: answer a random
   gauntlet of 3–10 trivia questions (4 choices each, from a pool of 1000 —
   see `js/trivia.js`, regenerated with `node tools/gen-trivia.js`). All

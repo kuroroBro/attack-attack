@@ -110,6 +110,29 @@ process; now the Host player's own browser tab. See Decisions #1.
    working, `server.js`, `Dockerfile`, and the npm server dependencies are
    deleted rather than kept side-by-side, so there's exactly one deployment
    target going forward, matching every sibling game.
+6. **Charge counts need per-viewer redaction, not a single broadcast
+   payload (v2).** Every other push in this game (`chat`, `emote`,
+   `roundResult`, `roomClosed`, and `state` before v2) is identical for
+   every recipient, so `room.js`'s original `broadcast(event, payload)` —
+   one JSON string, sent to every connection — was sufficient. Hiding
+   charges from everyone but their owner breaks that: the `state` push now
+   differs per recipient (each player's own charges included, everyone
+   else's omitted). Rather than bolt viewer-awareness onto `game.js` (which
+   must stay side-effect-free and shouldn't know about connections) or onto
+   `broadcast` (which would force every other event through the same
+   per-recipient path for no reason), `room.js` gained a second primitive,
+   `broadcastEach(event, payloadFor)`, used only for `state`; every other
+   event still uses the original uniform `broadcast`. `toPublicState(room,
+   viewerId)` takes the viewer as a parameter and returns that viewer's
+   redacted view — called once per connection by `broadcastEach`, and once
+   directly (no network hop) for the Host's own view.
+7. **Attack-vs-attack cancellation is a literal-pair check, not a general
+   cycle-breaker (v2).** Detecting "X attacked someone who attacked X back"
+   only requires checking each attacker's declared target's own action —
+   O(actors) work, no graph traversal. A longer cycle (X→Y→Z→X) still
+   resolves as three separate ordinary hits; deliberately not treated as
+   "everyone cancels," since that would take real cycle-detection for a
+   mechanic nobody asked for.
 
 ## Changelog
 
@@ -117,3 +140,12 @@ process; now the Host player's own browser tab. See Decisions #1.
   static PeerJS/GitHub Pages. No gameplay changes. SDD docs added
   retroactively for this migration (the original game was built without
   them).
+- **v2** (2026-07-12): Three rule/UX changes, all requested directly (no
+  Step-0 re-ask, since these are small deltas on an already-shipped game):
+  removed the starting charge (`START_CHARGES` 1 → 0, so round 1 is
+  charge/shield only); a direct mutual attack now cancels instead of
+  eliminating both players (Decision #7); and charge counts are now
+  private — hidden from the UI *and* redacted at the network level so a
+  non-owning player's client never receives them (Decision #6), matching
+  this project's existing "redact at the network level, not just the UI"
+  convention for the trivia gauntlet.

@@ -14,10 +14,10 @@ function startedRoom(names) {
   return room;
 }
 
-test("players join with 1 charge and unique creatures", () => {
+test("players join with 0 charges and unique creatures", () => {
   const room = roomWith(["Ana", "Ben", "Cy"]);
   assert.strictEqual(room.players.length, 3);
-  assert.ok(room.players.every((p) => p.charges === 1));
+  assert.ok(room.players.every((p) => p.charges === 0));
   assert.strictEqual(new Set(room.players.map((p) => p.creature)).size, 3);
   assert.strictEqual(room.hostId, "p1");
 });
@@ -50,6 +50,7 @@ test("charge caps at 3 and attack requires a charge", () => {
 
 test("cannot attack yourself or a dead player", () => {
   const room = startedRoom(["Ana", "Ben", "Cy"]);
+  g.getPlayer(room, "p1").charges = 1; // isolate the target-validation checks from the charge check
   assert.ok(g.submitAction(room, "p1", { type: "attack", targetId: "p1" }).error);
   g.getPlayer(room, "p3").alive = false;
   assert.ok(g.submitAction(room, "p1", { type: "attack", targetId: "p3" }).error);
@@ -57,6 +58,8 @@ test("cannot attack yourself or a dead player", () => {
 
 test("shield blocks any number of attacks, attack spends a charge", () => {
   const room = startedRoom(["Ana", "Ben", "Cy"]);
+  g.getPlayer(room, "p1").charges = 1;
+  g.getPlayer(room, "p2").charges = 1;
   g.submitAction(room, "p1", { type: "attack", targetId: "p3" });
   g.submitAction(room, "p2", { type: "attack", targetId: "p3" });
   g.submitAction(room, "p3", { type: "shield" });
@@ -70,6 +73,7 @@ test("shield blocks any number of attacks, attack spends a charge", () => {
 
 test("unshielded target is eliminated; last one standing wins", () => {
   const room = startedRoom(["Ana", "Ben"]);
+  g.getPlayer(room, "p1").charges = 1;
   g.submitAction(room, "p1", { type: "attack", targetId: "p2" });
   g.submitAction(room, "p2", { type: "charge" });
   g.resolveRound(room);
@@ -78,17 +82,40 @@ test("unshielded target is eliminated; last one standing wins", () => {
   assert.strictEqual(room.winnerId, "p1");
 });
 
-test("mutual attacks eliminate both — no winner", () => {
+test("mutual attacks collide and cancel — no elimination, charges still spent", () => {
   const room = startedRoom(["Ana", "Ben"]);
+  g.getPlayer(room, "p1").charges = 1;
+  g.getPlayer(room, "p2").charges = 1;
   g.submitAction(room, "p1", { type: "attack", targetId: "p2" });
   g.submitAction(room, "p2", { type: "attack", targetId: "p1" });
-  g.resolveRound(room);
+  const summary = g.resolveRound(room);
+  assert.strictEqual(g.getPlayer(room, "p1").alive, true);
+  assert.strictEqual(g.getPlayer(room, "p2").alive, true);
+  assert.strictEqual(g.getPlayer(room, "p1").charges, 0);
+  assert.strictEqual(g.getPlayer(room, "p2").charges, 0);
+  assert.ok(summary.moves.every((m) => m.canceled === true && m.eliminated === false));
+  assert.strictEqual(room.phase, "playing");
+  assert.strictEqual(room.round, 2);
+});
+
+test("a mutual-attack cancel doesn't extend to a 3-way cycle", () => {
+  // p1 → p2 → p3 → p1: no direct pair attacks each other back, so this is
+  // not a cancellation — every hit lands normally.
+  const room = startedRoom(["Ana", "Ben", "Cy"]);
+  for (const p of room.players) p.charges = 1;
+  g.submitAction(room, "p1", { type: "attack", targetId: "p2" });
+  g.submitAction(room, "p2", { type: "attack", targetId: "p3" });
+  g.submitAction(room, "p3", { type: "attack", targetId: "p1" });
+  const summary = g.resolveRound(room);
+  assert.ok(summary.moves.every((m) => m.canceled === false && m.eliminated === true));
   assert.strictEqual(room.phase, "over");
-  assert.strictEqual(room.winnerId, null);
+  assert.strictEqual(room.winnerId, null); // all mortals fell together
 });
 
 test("an attacker who dies this round still lands their attack", () => {
   const room = startedRoom(["Ana", "Ben", "Cy"]);
+  g.getPlayer(room, "p1").charges = 1;
+  g.getPlayer(room, "p2").charges = 1;
   g.submitAction(room, "p1", { type: "attack", targetId: "p2" });
   g.submitAction(room, "p2", { type: "attack", targetId: "p3" });
   g.submitAction(room, "p3", { type: "charge" });
@@ -101,7 +128,7 @@ test("an attacker who dies this round still lands their attack", () => {
 
 test("charging grows charges up to the cap over rounds", () => {
   const room = startedRoom(["Ana", "Ben"]);
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     g.submitAction(room, "p1", { type: "charge" });
     g.submitAction(room, "p2", { type: "shield" });
     g.resolveRound(room);
@@ -128,14 +155,27 @@ test("leaving mid-game eliminates the player and reassigns host", () => {
   assert.strictEqual(room.hostId, "p2");
 });
 
-test("public state hides pending actions but shows charges", () => {
+test("public state hides pending actions always, and charges from everyone but the viewer", () => {
   const room = startedRoom(["Ana", "Ben"]);
+  g.getPlayer(room, "p1").charges = 1;
   g.submitAction(room, "p1", { type: "attack", targetId: "p2" });
-  const state = g.toPublicState(room);
-  const ana = state.players.find((p) => p.id === "p1");
-  assert.strictEqual(ana.submitted, true);
-  assert.strictEqual(ana.action, undefined);
-  assert.strictEqual(ana.charges, 1);
+
+  const forAna = g.toPublicState(room, "p1");
+  const anaSeenByHerself = forAna.players.find((p) => p.id === "p1");
+  const benSeenByAna = forAna.players.find((p) => p.id === "p2");
+  assert.strictEqual(anaSeenByHerself.submitted, true);
+  assert.strictEqual(anaSeenByHerself.action, undefined);
+  assert.strictEqual(anaSeenByHerself.charges, 1); // her own charges, visible to her
+  assert.strictEqual(benSeenByAna.charges, undefined); // not Ben's
+
+  const forBen = g.toPublicState(room, "p2");
+  const anaSeenByBen = forBen.players.find((p) => p.id === "p1");
+  const benSeenByHimself = forBen.players.find((p) => p.id === "p2");
+  assert.strictEqual(anaSeenByBen.charges, undefined); // Ben can't see Ana's
+  assert.strictEqual(benSeenByHimself.charges, 0); // but sees his own
+
+  const spectatorView = g.toPublicState(room); // no viewerId → nobody's charges shown
+  assert.ok(spectatorView.players.every((p) => p.charges === undefined));
 });
 
 test("players can rename, but not to a taken name", () => {
@@ -189,12 +229,13 @@ test("join window: expired lobby rejects joins; starting clears it; rematch rene
   assert.strictEqual(room.lobbyDeadline, null);
   assert.strictEqual(g.lobbyExpired(room), false); // only lobbies expire
 
+  g.getPlayer(room, "p1").charges = 1;
   g.submitAction(room, "p1", { type: "attack", targetId: "p2" });
   g.submitAction(room, "p2", { type: "charge" });
   g.resolveRound(room);
   g.resetToLobby(room, "p1");
   assert.ok(room.lobbyDeadline > Date.now());
-  const state = g.toPublicState(room);
+  const state = g.toPublicState(room, "p1");
   assert.ok(state.lobbyMsLeft > 0 && state.lobbyMsLeft <= g.JOIN_WINDOW_MS);
 });
 
@@ -261,8 +302,8 @@ test("quiz: clearing the gauntlet revives the player as a wraith", () => {
   assert.strictEqual(res.revived, true);
   assert.strictEqual(p3.alive, true);
   assert.strictEqual(p3.wraith, true);
-  assert.strictEqual(p3.charges, 1);
-  const state = g.toPublicState(room);
+  assert.strictEqual(p3.charges, 0); // revival resets to the same starting charges as a fresh player
+  const state = g.toPublicState(room, "p3");
   const pub = state.players.find((p) => p.id === "p3");
   assert.strictEqual(pub.wraith, true);
   assert.strictEqual(pub.quiz, undefined); // internals never broadcast
@@ -277,6 +318,7 @@ test("wraiths play but cannot win: last mortal standing wins over a live wraith"
     res = answerCorrectly(room, "p3");
   } while (res.question);
   // Wraith p3 kills mortal p2 → one mortal (p1) left → p1 wins immediately
+  g.getPlayer(room, "p3").charges = 1; // revival reset it to 0; give the wraith a charge to attack with
   g.submitAction(room, "p3", { type: "attack", targetId: "p2" });
   g.submitAction(room, "p1", { type: "shield" });
   g.submitAction(room, "p2", { type: "charge" });
@@ -294,13 +336,18 @@ test("a wraith as sole survivor means no winner", () => {
   do {
     res = answerCorrectly(room, "p3");
   } while (res.question);
-  // Mortals p1 and p2 take each other out; wraith p3 shields and survives
+  // p1 attacks p2 (p2 falls); wraith p3 attacks p1 in the same round (p1
+  // falls too — a direct mutual attack would cancel, but this isn't one,
+  // p1 and p3 aren't targeting each other). Both mortals gone at once,
+  // wraith survives alone → nobody wins.
+  g.getPlayer(room, "p3").charges = 1; // revival reset it to 0
   g.submitAction(room, "p1", { type: "attack", targetId: "p2" });
-  g.submitAction(room, "p2", { type: "attack", targetId: "p1" });
-  g.submitAction(room, "p3", { type: "shield" });
+  g.submitAction(room, "p2", { type: "charge" });
+  g.submitAction(room, "p3", { type: "attack", targetId: "p1" });
   g.resolveRound(room);
   assert.strictEqual(room.phase, "over");
   assert.strictEqual(room.winnerId, null);
+  assert.strictEqual(g.getPlayer(room, "p3").alive, true);
 });
 
 test("a wraith who dies again gets a fresh trivia chance", () => {
@@ -330,11 +377,12 @@ test("quiz answers are rejected once the battle is over", () => {
 
 test("play again resets everyone back to the lobby", () => {
   const room = startedRoom(["Ana", "Ben"]);
+  g.getPlayer(room, "p1").charges = 1;
   g.submitAction(room, "p1", { type: "attack", targetId: "p2" });
   g.submitAction(room, "p2", { type: "charge" });
   g.resolveRound(room);
   assert.strictEqual(room.phase, "over");
   assert.deepStrictEqual(g.resetToLobby(room, "p1"), {});
   assert.strictEqual(room.phase, "lobby");
-  assert.ok(room.players.every((p) => p.alive && p.charges === 1));
+  assert.ok(room.players.every((p) => p.alive && p.charges === 0));
 });

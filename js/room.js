@@ -52,7 +52,13 @@ function peerOptions() {
 //
 // Resolves to:
 //   code
-//   broadcast(event, payload)  — unsolicited push to every connected peer
+//   broadcast(event, payload)         — same unsolicited push to every peer
+//   broadcastEach(event, payloadFor)  — a push computed per-recipient, via
+//                                       payloadFor(playerId); use this for
+//                                       anything that must differ by viewer
+//                                       (e.g. a state snapshot that includes
+//                                       that player's own private fields but
+//                                       omits everyone else's)
 //   close()                    — tear down the room
 export function hostRoom({ onMessage, onPeerClose, onError }, attempt = 0) {
   return new Promise((resolve, reject) => {
@@ -73,6 +79,11 @@ export function hostRoom({ onMessage, onPeerClose, onError }, attempt = 0) {
           const data = JSON.stringify({ event, payload });
           for (const conn of conns.values()) {
             if (conn.open) conn.send(data);
+          }
+        },
+        broadcastEach(event, payloadFor) {
+          for (const [playerId, conn] of conns.entries()) {
+            if (conn.open) conn.send(JSON.stringify({ event, payload: payloadFor(playerId) }));
           }
         },
         close() {

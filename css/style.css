@@ -185,13 +185,6 @@ input:focus { outline: 2px solid var(--gold-dark); border-color: transparent; }
 .pcard.targetable:hover { background: #2c1a2a; }
 .pcard.targeted { border-color: var(--red); background: #331722; box-shadow: 0 0 0 2px var(--red); }
 
-.pips { display: flex; gap: 4px; }
-.pip {
-  width: 14px; height: 14px; border-radius: 50%;
-  border: 1px solid var(--gold-dark); background: transparent;
-}
-.pip.full { background: var(--gold); box-shadow: 0 0 6px rgba(232, 182, 76, 0.7); }
-
 .ready-dot { font-size: 0.7rem; color: var(--muted); min-height: 1em; }
 .ready-dot.in { color: var(--green); }
 

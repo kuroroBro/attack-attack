@@ -54,13 +54,22 @@ As a player, I want to secretly choose Charge, Shield, or Attack each round
 and see all moves resolve at once, so no one can react to what I picked.
 
 **Acceptance criteria**
-- Rules are unchanged from the existing game: 1 starting charge, max 3;
-  Shield blocks every attack aimed at that player this round; Attack costs 1
-  charge and is chosen with a target; simultaneous resolution (a dying
-  attacker's own attack still lands).
+- 0 starting charges, max 3 — round 1 is always charge/shield only, since no
+  one can afford to attack yet (see plan.md Changelog v2). Shield blocks
+  every attack aimed at that player this round; Attack costs 1 charge and is
+  chosen with a target; simultaneous resolution (a dying attacker's own
+  attack still lands).
+- A direct mutual attack — X attacks Y and Y attacks X in the same round —
+  cancels out: neither is eliminated, though both still spend the charge
+  (v2). This does not extend to longer cycles (X→Y, Y→Z, Z→X all resolve
+  normally); only a literal attacking pair cancels.
 - Other players' pending action **type** and **target** must never appear on
   the wire before the round resolves — only a `submitted: true/false` flag
   is broadcast mid-round, exactly as today.
+- Charge counts are private (v2): a player's own state includes their own
+  charges; every other player's charges are omitted from what's sent to
+  them, not just hidden in the UI. The Attack/Charge buttons are still
+  enabled or disabled correctly off the player's own (private) count.
 - A round resolves the instant every living player has locked in a move.
 - Last mortal standing wins; simultaneous last-mortal elimination is a draw
   (a lone surviving Wraith does not win).

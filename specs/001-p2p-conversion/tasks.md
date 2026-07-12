@@ -53,10 +53,41 @@
 - [x] Update `README.md`: static/PeerJS architecture, local dev via any
       static file server, GitHub Pages deploy, drop Cloud Run/Docker
       instructions.
-- [ ] `git init`, first commit, GitHub remote created, pushed, Pages
-      enabled, live URL verified serving the current build. (Needs the
-      project owner to confirm the target GitHub repo before this step —
-      see chat.)
+- [x] `git init`, first commit, GitHub remote created
+      (`kuroroBro/attack-attack`), pushed, Pages enabled, live URL verified
+      serving the current build (`https://kuroroBro.github.io/attack-attack/`).
+
+## Phase 7 — Rule changes: no starting charge, mutual-attack cancel, private charges (post-launch addition)
+- [x] `js/game.js`: `START_CHARGES` 1 → 0 (round 1 is charge/shield only).
+- [x] `js/game.js`: `resolveRound` — a direct mutual attack (X↔Y target each
+      other) cancels instead of eliminating both; charge is still spent.
+      Added a `canceled` flag per move in the round summary; dropped the
+      unused `charges` field from round-summary moves (it would have leaked
+      post-round charges to every viewer — see next item).
+- [x] `js/game.js`: `toPublicState(room, viewerId)` — charges included only
+      for the matching player, `undefined` (dropped by `JSON.stringify`)
+      for everyone else.
+- [x] `js/room.js`: added `broadcastEach(event, payloadFor)` alongside the
+      existing uniform `broadcast`, for pushes that must differ per
+      recipient (currently only `state`).
+- [x] `js/main.js`: `broadcastState()` uses `broadcastEach` for remote
+      peers and calls `toPublicState(room, myId)` directly for the Host's
+      own view; removed the charge-pip UI (`pips()` + its CSS) and the
+      exact charge count from the action-hint text; round log shows
+      "blows collided, no one falls" for a canceled mutual attack.
+- [x] `index.html` / `README.md`: updated rules copy for 0 starting
+      charges, mutual-attack cancellation, and private charges.
+- [x] `tests/game.test.mjs`: updated every test that assumed 1 starting
+      charge (added explicit `.charges = 1` setup where a test needs an
+      immediate attack); replaced the old "mutual attacks eliminate both"
+      test with cancellation tests (a direct pair, and a 3-cycle that does
+      *not* cancel); rewrote the charge-redaction test for the new
+      per-viewer `toPublicState` signature. 26/26 passing.
+- [x] Playwright playtest against the local build: confirmed zero `.pip`
+      elements render, the Attack button is disabled at round 1, the
+      action-hint contains no digit, and a live mutual attack between two
+      real tabs produces "blows collided" on both logs with neither player
+      marked dead.
 
 ## Open backlog (intentionally deferred)
 

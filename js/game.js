@@ -4,8 +4,10 @@
 // - 2..8 players per room. Everyone picks an action each round, secretly.
 // - Actions: charge (+1 charge, max 3), shield (free, blocks every attack
 //   aimed at you this round), attack (spend 1 charge, pick a target).
-// - Players start with 1 charge. Resolution is simultaneous: an attacker who
-//   dies this round still lands their own attack.
+// - Players start with 0 charges, so round 1 is always charge/shield only —
+//   no one can attack until they've charged at least once. Resolution is
+//   simultaneous: an attacker who dies this round still lands their own
+//   attack.
 // - Last MORTAL alive wins. If the final mortals take each other out in the
 //   same round, nobody wins.
 // - The dead get one chance per death to rise again as a Wraith: answer a
@@ -15,7 +17,7 @@
 
 export const MAX_PLAYERS = 8;
 export const MAX_CHARGES = 3;
-export const START_CHARGES = 1;
+export const START_CHARGES = 0;
 // How long a lobby stays open for joins.
 export const JOIN_WINDOW_MS = 60 * 60 * 1000;
 
@@ -213,20 +215,41 @@ export function allActionsIn(room) {
 
 // Resolve one round simultaneously. Call only when allActionsIn(room).
 // Returns the round summary (also stored on room.lastRound).
+//
+// A direct mutual attack — X attacks Y and Y attacks X in the same round —
+// cancels out: neither lands, as if the blows collided. Both attackers still
+// spend their charge; only the elimination is called off. This does not
+// extend to longer cycles (X→Y, Y→Z, Z→X all resolve normally) — only a
+// literal pair attacking each other cancels.
 export function resolveRound(room) {
   const actors = alivePlayers(room);
   const shielded = new Set(
     actors.filter((p) => p.action.type === "shield").map((p) => p.id)
   );
 
+  function isMutualAttack(p) {
+    const target = getPlayer(room, p.action.targetId);
+    return (
+      !!target &&
+      !!target.action &&
+      target.action.type === "attack" &&
+      target.action.targetId === p.id
+    );
+  }
+
   const hit = new Set();
+  const canceled = new Set();
   for (const p of actors) {
     const a = p.action;
     if (a.type === "charge") {
       p.charges = Math.min(MAX_CHARGES, p.charges + 1);
     } else if (a.type === "attack") {
       p.charges -= 1;
-      if (!shielded.has(a.targetId)) hit.add(a.targetId);
+      if (isMutualAttack(p)) {
+        canceled.add(p.id);
+      } else if (!shielded.has(a.targetId)) {
+        hit.add(a.targetId);
+      }
     }
   }
 
@@ -241,7 +264,7 @@ export function resolveRound(room) {
       targetId: p.action.targetId || null,
       targetName: p.action.targetId ? getPlayer(room, p.action.targetId).name : null,
       eliminated: hit.has(p.id),
-      charges: p.charges,
+      canceled: canceled.has(p.id),
     })),
   };
 
@@ -341,9 +364,13 @@ export function answerQuiz(room, playerId, choice, pool, rng = Math.random) {
   return { revived: true };
 }
 
-// State safe to broadcast: everyone's charges are public, pending actions are
-// not (only a submitted flag).
-export function toPublicState(room) {
+// State safe to broadcast, from `viewerId`'s point of view: pending actions
+// are never included (only a submitted flag), and charge counts are private
+// — a player's own charges are included only in the state built for that
+// same player; everyone else's are omitted entirely, not just hidden in the
+// UI. Pass no viewerId (or one that matches no player) to get a state with
+// every player's charges withheld, e.g. for a spectator view.
+export function toPublicState(room, viewerId) {
   return {
     code: room.code,
     phase: room.phase,
@@ -365,7 +392,7 @@ export function toPublicState(room) {
       creatureName: p.creatureName,
       alive: p.alive,
       left: !!p.left,
-      charges: p.charges,
+      charges: p.id === viewerId ? p.charges : undefined,
       submitted: p.action !== null,
       wraith: p.wraith,
       canRevive: p.canRevive,
