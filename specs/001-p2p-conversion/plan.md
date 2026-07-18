@@ -12,7 +12,7 @@ index.html            screens (home, lobby, game) — ported from public/index.h
 css/style.css          ported from public/style.css, unchanged (no server refs in it)
 js/game.js              pure rules engine — ported from game.js, ESM, no I/O
 js/trivia.js             1000-question pool as plain data (ESM), was trivia.json
-js/storage.js            localStorage: last-used name + creature
+js/storage.js            localStorage: settings + private per-room rejoin token
 js/room.js               PeerJS room wrapper — NEW shape, see below
 js/main.js               DOM wiring + host-side room-authority logic
 vendor/peerjs.min.js     vendored PeerJS client (copied from word-scramble)
@@ -56,6 +56,23 @@ different pair of functions than the Host+Display siblings:
   a "client tab" anymore — the Host's browser tab is both.
 - Distinct PeerJS ID prefix `survivor-room-` so rooms never collide with
   the sibling games' rooms on the shared public broker.
+
+### Player rejoin model
+
+- On first join, the client creates a random bearer token and saves it with
+  the room code and player name in localStorage. The Host stores that token
+  only on the private player record.
+- A reload of `?room=CODE` automatically sends the saved token. The Host
+  rebinds the existing seat to the new PeerJS connection id, preserving all
+  gameplay state, and acknowledges the request as a rejoin.
+- Public snapshots expose only `connected`; `resumeToken` is deliberately
+  omitted. An offline seat remains eligible for later reclamation.
+- Round readiness considers connected, alive players. If an offline player
+  did not already lock a move, resolution supplies Charge as a deterministic
+  non-blocking default. Offline seats are discarded at the next fresh game or
+  rematch lobby.
+- The token restores a player seat, not the in-memory Host authority. Decision
+  #2 still applies if the Host tab itself closes.
 
 ### Redaction — unchanged in shape, changed in guarantee
 

@@ -113,17 +113,26 @@ with the same seats, so we can run it back without everyone re-joining.
 - Unchanged: only the Host can trigger it, only from the `over` phase, and
   it resets to `lobby` with a fresh 60-minute join window.
 
-### US-7: Disconnect handling
-As a player, I want the game to keep working sensibly if someone's
-connection drops, so one dropped phone doesn't stall the room.
+### US-7: Disconnect and rejoin handling
+As a player, I want to reclaim my seat after a reload or temporary connection
+drop, while connected players can keep playing if I stay offline.
 
 **Acceptance criteria**
-- Mid-game disconnect marks that player eliminated (seat stays visible,
-  marked "left") rather than removing them, matching current behavior.
-- A round can't wait forever on a player who is gone — if a disconnect
-  leaves the round's `allActionsIn` check satisfied, resolution proceeds.
+- Joining a room saves the player's name and a cryptographically random,
+  private, per-room rejoin token in that browser's localStorage.
+- Reloading a room URL automatically presents that token and reclaims the
+  existing seat rather than creating a new player.
+- Rejoining preserves the seat's mortal/Wraith and alive/eliminated status,
+  charges, trivia progress, and any action already locked for the round.
+- A disconnected seat remains visible as offline. It is not eliminated merely
+  because its connection dropped, and its rejoin token is never included in a
+  public state snapshot or broadcast.
+- An offline player with no locked action cannot stall connected players: once
+  all connected, alive players have acted, the missing move resolves as Charge.
+- Starting a new game or returning to the rematch lobby removes seats that are
+  still offline.
 - If the Host disconnects, the room cannot continue (see plan.md Decisions
-  #2) — this is a new, explicitly accepted limitation vs. the server build.
+  #2); restoring Host authority after its tab closes remains out of scope.
 
 ## Functional Requirements
 
@@ -139,13 +148,15 @@ connection drops, so one dropped phone doesn't stall the room.
   are excluded from every outbound message exactly as the current
   `toPublicState`/`serveQuestion` already do.
 - **FR-5** No ads, no analytics, no tracking, no accounts.
+- **FR-6** Rejoin credentials are bearer secrets: they stay in the owning
+  browser's localStorage, are sent only in a targeted join request, and are
+  excluded from `toPublicState`.
 
 ## Non-goals
 
 - No gameplay/rules changes — this is strictly an architecture migration.
-- No reconnection/session-resume support (matches the current game: a
-  dropped connection means rejoin fresh, there is no "resume as the same
-  player" flow either before or after this change).
+- No cross-browser/cross-device seat transfer, account recovery, or Host-state
+  restoration after the Host tab closes.
 - No relay/TURN fallback beyond what the public PeerJS broker + browser
   WebRTC already provide — same reachability envelope as the sibling games.
 - No attempt to prevent a technically capable Host from inspecting their own

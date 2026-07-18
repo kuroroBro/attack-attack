@@ -42,6 +42,14 @@ screen has room chat and quick emotes (bubbles pop over the sender's card).
 After a game the host's "Play again" returns the whole room to the same
 lobby for a rematch.
 
+Each browser keeps a private rejoin token for every room it enters. Reloading
+that room URL automatically reclaims the same seat, including its mortal or
+Wraith status, charges, trivia progress, and any move already locked for the
+current round. Disconnected seats are shown as offline and never block the
+connected players from resolving a round. The token stays in localStorage and
+is never included in public room state. The Host remains the room relay, so a
+closed Host tab still ends the room.
+
 ## Architecture
 
 Vanilla JS, no build step, no framework — the repo IS the deployable
@@ -52,14 +60,15 @@ including the trust-model trade-off below.
 
 - `js/game.js` — pure game logic (rooms, actions, round resolution). No I/O.
 - `js/trivia.js` — the 1000-question trivia pool, as data.
-- `js/storage.js` — remembers your last-used name and beast.
+- `js/storage.js` — remembers your last-used name and beast, plus private
+  per-room rejoin credentials.
 - `js/room.js` — PeerJS/WebRTC networking. Every player is a full peer
   (unlike the Host+Display sibling games): whoever creates a room becomes
   its authoritative Host, and every other player's client sends intents
   over a data channel and renders whatever state the Host last pushed.
 - `js/main.js` — DOM wiring, plus the Host-side event handling that plays
   the role `server.js` used to.
-- `tests/game.test.mjs` — unit tests (`node --test tests/game.test.mjs`).
+- `tests/*.test.mjs` — rules and storage tests (`node --test tests/*.test.mjs`).
 - Creature icons in `creatures/` are by Lorc and Delapouite from
   [game-icons.net](https://game-icons.net) (CC BY 3.0).
 
@@ -81,7 +90,7 @@ Any static file server works, e.g.:
 
 ```sh
 npx serve .          # or: python3 -m http.server 8080
-node --test tests/game.test.mjs
+node --test tests/*.test.mjs
 ```
 
 ## Deploy

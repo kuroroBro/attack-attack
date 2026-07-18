@@ -67,7 +67,7 @@ export function aliveMortals(room) {
 
 // creatureId is an optional preference (picked on the join screen); if it's
 // invalid or already taken the player gets the first free beast instead.
-export function addPlayer(room, playerId, name, creatureId) {
+export function addPlayer(room, playerId, name, creatureId, resumeToken = null) {
   if (room.phase !== "lobby") return { error: "Game already in progress" };
   if (lobbyExpired(room)) return { error: "This lobby has expired — create a new room" };
   if (room.players.length >= MAX_PLAYERS) return { error: "Room is full (8 players max)" };
@@ -90,9 +90,26 @@ export function addPlayer(room, playerId, name, creatureId) {
     wraith: false,
     canRevive: false, // set on elimination; one trivia chance per death
     quiz: null, // active trivia challenge, host-side only
+    connected: true,
+    resumeToken: resumeToken || null,
   };
   room.players.push(player);
   if (!room.hostId) room.hostId = playerId;
+  return { player };
+}
+
+export function rejoinPlayer(room, playerId, resumeToken) {
+  if (!resumeToken) return { error: "No saved seat found" };
+  const player = room.players.find((p) => p.resumeToken === resumeToken);
+  if (!player) return { error: "No saved seat found" };
+  const previousId = player.id;
+  player.id = playerId;
+  for (const other of room.players) {
+    if (other.action?.targetId === previousId) other.action.targetId = playerId;
+  }
+  if (room.hostId === previousId) room.hostId = playerId;
+  player.connected = true;
+  player.left = false;
   return { player };
 }
 
@@ -127,25 +144,17 @@ export function chooseCreature(room, playerId, creatureId) {
 export function removePlayer(room, playerId) {
   const player = getPlayer(room, playerId);
   if (!player) return room.players.length === 0;
-  if (room.phase === "lobby" || room.phase === "over") {
-    room.players = room.players.filter((p) => p.id !== playerId);
-  } else {
-    // Mid-game: leaving means elimination, seat stays visible on the board
-    player.alive = false;
-    player.action = null;
-    player.left = true;
-  }
-  if (room.hostId === playerId) {
-    const next = room.players.find((p) => !p.left);
-    room.hostId = next ? next.id : null;
-  }
-  return room.players.filter((p) => !p.left).length === 0;
+  player.connected = false;
+  player.left = true;
+  return room.players.filter((p) => p.connected).length === 0;
 }
 
 export function startGame(room, byId) {
   if (room.phase === "playing") return { error: "Game already started" };
   if (byId !== room.hostId) return { error: "Only the host can start the game" };
-  if (room.players.length < 2) return { error: "Need at least 2 players" };
+  const connectedPlayers = room.players.filter((p) => p.connected);
+  if (connectedPlayers.length < 2) return { error: "Need at least 2 connected players" };
+  room.players = connectedPlayers;
   for (const p of room.players) {
     p.alive = true;
     p.charges = START_CHARGES;
@@ -166,6 +175,7 @@ export function startGame(room, byId) {
 export function resetToLobby(room, byId) {
   if (byId !== room.hostId) return { error: "Only the host can reset the room" };
   if (room.phase !== "over") return { error: "Game is not over" };
+  room.players = room.players.filter((p) => p.connected);
   room.phase = "lobby";
   room.round = 0;
   room.winnerId = null;
@@ -211,6 +221,8 @@ export function submitAction(room, playerId, action) {
 
 export function allActionsIn(room) {
   const alive = alivePlayers(room);
+  const connected = alive.filter((p) => p.connected);
+  if (connected.length > 0) return connected.every((p) => p.action !== null);
   return alive.length > 0 && alive.every((p) => p.action !== null);
 }
 
@@ -230,6 +242,12 @@ export function allActionsIn(room) {
 // the *dud's own* strike that fizzles.
 export function resolveRound(room) {
   const actors = alivePlayers(room);
+  // An offline player who has not submitted defaults to charging. This lets
+  // connected players finish the simultaneous round without granting the
+  // missing seat an automatic shield or destroying its rejoinable identity.
+  for (const p of actors) {
+    if (!p.connected && p.action === null) p.action = { type: "charge" };
+  }
   const shielded = new Set(
     actors.filter((p) => p.action.type === "shield").map((p) => p.id)
   );
@@ -416,6 +434,7 @@ export function toPublicState(room, viewerId) {
       creatureName: p.creatureName,
       alive: p.alive,
       left: !!p.left,
+      connected: p.connected,
       charges: p.id === viewerId ? p.charges : undefined,
       submitted: p.action !== null,
       wraith: p.wraith,

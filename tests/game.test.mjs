@@ -4,7 +4,7 @@ import * as g from "../js/game.js";
 
 function roomWith(names) {
   const room = g.createRoom("TEST");
-  names.forEach((name, i) => g.addPlayer(room, `p${i + 1}`, name));
+  names.forEach((name, i) => g.addPlayer(room, `p${i + 1}`, name, null, `token-${i + 1}`));
   return room;
 }
 
@@ -177,14 +177,40 @@ test("actions can be changed until everyone is in", () => {
   assert.strictEqual(g.getPlayer(room, "p1").action.type, "shield");
 });
 
-test("leaving mid-game eliminates the player and reassigns host", () => {
+test("disconnect keeps a private, rejoinable seat without changing host", () => {
   const room = startedRoom(["Ana", "Ben", "Cy"]);
+  g.submitAction(room, "p2", { type: "attack", targetId: "p1" });
   const empty = g.removePlayer(room, "p1");
   assert.strictEqual(empty, false);
   const ana = g.getPlayer(room, "p1");
-  assert.strictEqual(ana.alive, false);
+  assert.strictEqual(ana.alive, true);
+  assert.strictEqual(ana.connected, false);
   assert.ok(ana.left);
-  assert.strictEqual(room.hostId, "p2");
+  assert.strictEqual(room.hostId, "p1");
+  assert.ok(g.rejoinPlayer(room, "p1-new", "wrong").error);
+  assert.strictEqual(g.rejoinPlayer(room, "p1-new", "token-1").player, ana);
+  assert.strictEqual(ana.id, "p1-new");
+  assert.strictEqual(room.hostId, "p1-new");
+  assert.strictEqual(ana.connected, true);
+  assert.strictEqual(g.getPlayer(room, "p2").action.targetId, "p1-new");
+});
+
+test("offline players default to charge so connected players can resolve", () => {
+  const room = startedRoom(["Ana", "Ben", "Cy"]);
+  g.removePlayer(room, "p3");
+  g.submitAction(room, "p1", { type: "shield" });
+  g.submitAction(room, "p2", { type: "shield" });
+  assert.strictEqual(g.allActionsIn(room), true);
+  const summary = g.resolveRound(room);
+  assert.strictEqual(summary.moves.find((m) => m.name === "Cy").action, "charge");
+  assert.strictEqual(g.getPlayer(room, "p3").charges, 1);
+});
+
+test("rejoin token and other private player internals are never broadcast", () => {
+  const room = startedRoom(["Ana", "Ben"]);
+  const pub = g.toPublicState(room, "p1");
+  assert.strictEqual(pub.players[0].resumeToken, undefined);
+  assert.strictEqual(pub.players[0].connected, true);
 });
 
 test("public state hides pending actions always, and charges from everyone but the viewer", () => {

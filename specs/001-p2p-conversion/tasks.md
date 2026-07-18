@@ -114,13 +114,20 @@
       and the "fizzles" log line, and — in a dud-vs-real exchange — the
       real attacker's strike still eliminates the dud-throwing player.
 
+## Phase 9 — Private player rejoin (post-launch addition)
+- [x] Persist a random per-room token and player name in localStorage, and
+      automatically rejoin saved seats when their room URL is reloaded.
+- [x] Rebind the existing player record to the new PeerJS id while preserving
+      alive/eliminated, mortal/Wraith, charges, trivia, and locked-action state.
+- [x] Mark disconnected seats offline without eliminating them; ignore offline
+      missing actions for readiness and resolve them as Charge.
+- [x] Exclude private tokens from public state; remove offline seats when a new
+      game or rematch lobby begins.
+- [x] Add rules/storage coverage and update README, spec, and plan.
+
 ## Open backlog (intentionally deferred)
 
 - Host migration on Host disconnect (plan.md Decision #2) — the room
   currently cannot survive the Host's tab closing. Promoting another peer
   to relay and having the rest reconnect is real follow-up work, not
   bundled into this migration.
-- Reconnect/session-resume for any dropped player (Host or not) — matches
-  the pre-existing game's behavior (also absent in the server build), not
-  a regression introduced here, but worth reconsidering now that "the
-  Host's own connection" is a new single point of failure.

@@ -9,7 +9,7 @@
 import * as game from "./game.js";
 import { TRIVIA } from "./trivia.js";
 import { hostRoom, joinRoom } from "./room.js";
-import { loadSettings, saveSettings } from "./storage.js";
+import { createResumeToken, loadPlayerSession, loadSettings, savePlayerSession, saveSettings } from "./storage.js";
 
 const HOST_ID = "host"; // stable local id for the Host's own player entry
 const EMOTES = ["👍", "😂", "😮", "🔥", "💀", "❤️"];
@@ -24,6 +24,7 @@ let targeting = false; // attack chosen, waiting for a target click
 let myTargetId = null;
 let lobbyDeadline = null; // local clock: when the join window closes
 let homeCreatureId = null; // beast picked on the join screen (optional)
+let activeResumeToken = null;
 const emotes = new Map(); // playerId -> { emoji, until }
 const lastChatAt = new Map(); // playerId -> ms (Host-side rate limit)
 const lastEmoteAt = new Map();
@@ -199,6 +200,7 @@ function renderGame() {
     card.className = "pcard";
     if (p.id === myId) card.classList.add("me");
     if (!p.alive) card.classList.add("dead");
+    if (!p.connected) card.classList.add("disconnected");
     if (p.wraith) card.classList.add("wraith");
     if (iCanTarget && p.alive && p.id !== myId) card.classList.add("targetable");
     if (myTargetId === p.id) card.classList.add("targeted");
@@ -211,12 +213,14 @@ function renderGame() {
     const cname = document.createElement("div");
     cname.className = "cname";
     cname.textContent =
-      (p.wraith ? "Wraith · " : "") + p.creatureName + (p.left ? " · left" : "");
+      (p.wraith ? "Wraith · " : "") + p.creatureName + (!p.connected ? " · offline" : "");
     card.append(name, cname);
 
     const ready = document.createElement("div");
     ready.className = "ready-dot";
-    if (state.phase === "playing" && p.alive) {
+    if (!p.connected) {
+      ready.textContent = "can rejoin";
+    } else if (state.phase === "playing" && p.alive) {
       ready.textContent = p.submitted ? "✓ ready" : "choosing…";
       if (p.submitted) ready.classList.add("in");
     } else if (state.phase === "playing" && !p.alive && p.quizzing) {
@@ -360,10 +364,14 @@ function handleEvent(playerId, event, payload) {
   payload = payload || {};
   switch (event) {
     case "joinRoom": {
-      const res = game.addPlayer(room, playerId, payload.name, payload.creatureId);
+      let res = game.rejoinPlayer(room, playerId, payload.resumeToken);
+      const rejoined = !res.error;
+      if (res.error === "No saved seat found") {
+        res = game.addPlayer(room, playerId, payload.name, payload.creatureId, payload.resumeToken);
+      }
       if (res.error) return { error: res.error };
       broadcastState();
-      return { code: room.code, playerId, state: game.toPublicState(room, playerId) };
+      return { code: room.code, playerId, rejoined, state: game.toPublicState(room, playerId) };
     }
     case "rename": {
       const res = game.renamePlayer(room, playerId, payload.name);
@@ -469,27 +477,10 @@ function maybeResolve() {
 
 function handlePeerClose(playerId) {
   if (!room) return;
-  const empty = game.removePlayer(room, playerId);
-  if (empty) {
-    net.close();
-    net = null;
-    room = null;
-    isHost = false;
-    return;
-  }
+  game.removePlayer(room, playerId);
   broadcastState();
   // A round can't wait on a player who is gone
   maybeResolve();
-  // If the disconnect left at most one mortal mid-game, the battle ends
-  // (wraiths cannot win, so they don't keep it going)
-  if (room.phase === "playing") {
-    const mortals = game.aliveMortals(room);
-    if (mortals.length <= 1) {
-      room.phase = "over";
-      room.winnerId = mortals.length === 1 ? mortals[0].id : null;
-      broadcastState();
-    }
-  }
 }
 
 // ---------- Inbound event dispatch (both Host loopback and network push) ----------
@@ -585,7 +576,10 @@ function enterRoom(res) {
   history.replaceState(null, "", `?room=${res.code}`);
   render();
   const my = me();
-  if (my) saveSettings({ name: my.name, creatureId: my.creature });
+  if (my) {
+    saveSettings({ name: my.name, creatureId: my.creature });
+    if (activeResumeToken) savePlayerSession(res.code, { resumeToken: activeResumeToken, name: my.name });
+  }
   if (homeCreatureId && my && my.creature !== homeCreatureId) {
     toast(`That beast was taken — you are the ${my.creatureName} (change it below)`);
   }
@@ -630,10 +624,12 @@ $("create-btn").addEventListener("click", async () => {
 async function join(code, name) {
   $("join-btn").disabled = true;
   try {
+    const savedSession = loadPlayerSession(code);
+    activeResumeToken = savedSession ? savedSession.resumeToken : createResumeToken();
     const joined = await joinRoom(code, { onPush: handlePush, onClose: handleNetClose });
     net = joined;
     isHost = false;
-    const res = await net.send("joinRoom", { name, creatureId: homeCreatureId });
+    const res = await net.send("joinRoom", { name, creatureId: homeCreatureId, resumeToken: activeResumeToken });
     if (res.error) {
       net.close();
       net = null;
@@ -641,6 +637,7 @@ async function join(code, name) {
     }
     myId = joined.id;
     enterRoom(res);
+    if (res.rejoined) toast("Rejoined your previous seat");
   } catch (err) {
     resetToHome();
     toast(err.message || "Could not join that room");
@@ -774,5 +771,12 @@ for (const btn of document.querySelectorAll(".emote-btn")) {
 const roomParam = new URLSearchParams(location.search).get("room");
 if (roomParam) {
   $("code-input").value = roomParam.toUpperCase();
-  $("name-input").focus();
+  const savedSession = loadPlayerSession(roomParam);
+  if (savedSession?.name) {
+    $("name-input").value = savedSession.name;
+    $("join-btn").textContent = "Rejoin";
+    join(roomParam, savedSession.name);
+  } else {
+    $("name-input").focus();
+  }
 }

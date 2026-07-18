@@ -181,6 +181,7 @@ input:focus { outline: 2px solid var(--gold-dark); border-color: transparent; }
 .pcard .pname { font-size: 0.9rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pcard .cname { font-size: 0.7rem; color: var(--muted); }
 .pcard.dead { opacity: 0.35; }
+.pcard.disconnected { border-style: dashed; opacity: 0.55; }
 .pcard.dead .avatar { color: var(--muted); }
 .pcard.dead::after {
   content: "☠"; position: absolute; inset: 0;
